@@ -36,21 +36,66 @@
   --color-risk-warning: var(--risk-warning);
   --color-risk-ok: var(--risk-ok);
   --color-cyan: var(--cyan);
+
+  /* Theme-aware semantic text & border tokens */
+  --color-heading: var(--heading);
+  --color-body: var(--body);
+  --color-subtle: var(--subtle);
+  --color-border-subtle: var(--border-subtle);
 }
 
 :root {
   --radius: 0.625rem;
 
-  /* Dark cybersecurity palette */
-  --background: oklch(0.18 0.02 250);          /* slate-900 */
+  /* ── Light palette ── */
+  --background: oklch(0.975 0.005 250);          /* near-white */
+  --foreground: oklch(0.20 0.02 250);             /* near-black */
+  --surface: oklch(0.97 0.005 250);               /* white cards */
+  --surface-2: oklch(0.94 0.005 250);             /* hover */
+  --card: oklch(0.97 0.005 250);
+  --card-foreground: oklch(0.20 0.02 250);
+  --popover: oklch(0.98 0.005 250);
+  --popover-foreground: oklch(0.20 0.02 250);
+  --primary: oklch(0.55 0.20 220);                /* deeper cyan for contrast on white */
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.93 0.005 250);
+  --secondary-foreground: oklch(0.25 0.02 250);
+  --muted: oklch(0.93 0.005 250);
+  --muted-foreground: oklch(0.45 0.02 250);
+  --accent: oklch(0.92 0.02 220);
+  --accent-foreground: oklch(0.20 0.02 250);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.88 0.01 250);
+  --input: oklch(0.93 0.005 250);
+  --ring: oklch(0.55 0.20 220);
+
+  --sidebar: oklch(0.96 0.005 250);
+  --sidebar-foreground: oklch(0.25 0.02 250);
+
+  --risk-critical: oklch(0.55 0.25 25);
+  --risk-warning: oklch(0.72 0.17 85);
+  --risk-ok: oklch(0.55 0.18 150);
+  --cyan: oklch(0.55 0.16 210);
+
+  /* Semantic text */
+  --heading: oklch(0.15 0.02 250);
+  --body: oklch(0.35 0.02 250);
+  --subtle: oklch(0.50 0.01 250);
+  --border-subtle: oklch(0.88 0.01 250);
+}
+
+.dark {
+  /* ── Dark cybersecurity palette ── */
+  --background: oklch(0.18 0.02 250);
   --foreground: oklch(0.96 0.005 250);
-  --surface: oklch(0.235 0.02 250);            /* slate-800 cards */
-  --surface-2: oklch(0.28 0.02 250);           /* hover */
+  --surface: oklch(0.235 0.02 250);
+  --surface-2: oklch(0.28 0.02 250);
   --card: oklch(0.235 0.02 250);
   --card-foreground: oklch(0.96 0.005 250);
   --popover: oklch(0.235 0.02 250);
   --popover-foreground: oklch(0.96 0.005 250);
-  --primary: oklch(0.72 0.16 220);             /* cyan-ish */
+  --primary: oklch(0.72 0.16 220);
   --primary-foreground: oklch(0.15 0.02 250);
   --secondary: oklch(0.3 0.02 250);
   --secondary-foreground: oklch(0.96 0.005 250);
@@ -67,10 +112,16 @@
   --sidebar: oklch(0.155 0.02 255);
   --sidebar-foreground: oklch(0.92 0.005 250);
 
-  --risk-critical: oklch(0.65 0.25 25);   /* red */
-  --risk-warning: oklch(0.82 0.17 85);    /* amber */
-  --risk-ok: oklch(0.72 0.18 150);        /* green */
+  --risk-critical: oklch(0.65 0.25 25);
+  --risk-warning: oklch(0.82 0.17 85);
+  --risk-ok: oklch(0.72 0.18 150);
   --cyan: oklch(0.78 0.13 210);
+
+  /* Semantic text */
+  --heading: oklch(0.96 0.005 250);
+  --body: oklch(0.75 0.01 250);
+  --subtle: oklch(0.55 0.01 250);
+  --border-subtle: oklch(0.28 0.01 250 / 0.5);
 }
 
 @layer base {
@@ -85,23 +136,40 @@
     color: var(--color-foreground);
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
+  /* Smooth theme transition */
+  html {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  html * {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.15s ease, box-shadow 0.25s ease;
+  }
 }
 
-/* Leaflet dark-friendly overrides */
+/* Leaflet theme-aware overrides */
 .leaflet-container {
-  background: #0b1220;
+  background: var(--color-background);
   font-family: inherit;
 }
 .leaflet-control-attribution {
+  background: var(--color-surface) !important;
+  color: var(--color-subtle) !important;
+}
+.leaflet-control-attribution a { color: var(--color-primary) !important; }
+.leaflet-control-zoom a {
+  background: var(--color-surface) !important;
+  color: var(--color-foreground) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Dark-specific Leaflet overrides */
+.dark .leaflet-container {
+  background: #0b1220;
+}
+.dark .leaflet-control-attribution {
   background: rgba(15, 23, 42, 0.7) !important;
   color: #94a3b8 !important;
 }
-.leaflet-control-attribution a { color: #67e8f9 !important; }
-.leaflet-control-zoom a {
-  background: var(--surface) !important;
-  color: var(--foreground) !important;
-  border-color: var(--border) !important;
-}
+.dark .leaflet-control-attribution a { color: #67e8f9 !important; }
 
 /* Pulsing risk marker */
 .risk-marker {
@@ -125,8 +193,8 @@
   100% { transform: scale(1.8); opacity: 0; }
 }
 
-/* Subtle scanline grid for cyber feel */
-.cyber-grid {
+/* Subtle scanline grid for cyber feel (dark only) */
+.dark .cyber-grid {
   background-image:
     linear-gradient(rgba(56,189,248,0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(56,189,248,0.05) 1px, transparent 1px);

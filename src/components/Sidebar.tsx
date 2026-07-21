@@ -7,6 +7,7 @@ import {
   Settings,
   Download,
   ShieldCheck,
+  Menu,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -24,7 +25,7 @@ const sysNav: NavItem[] = [
   { to: "/integrations", label: "Интеграции", icon: Download },
 ];
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({ item, active, isCollapsed }: { item: NavItem; active: boolean; isCollapsed: boolean }) {
   const Icon = item.icon;
   return (
     <Link
@@ -32,69 +33,68 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       className={[
         "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all",
         active
-          ? "bg-gradient-to-r from-cyan-500/15 to-transparent text-cyan-300 border border-cyan-500/30 shadow-[0_0_20px_-8px_oklch(0.78_0.13_210/.6)]"
-          : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent",
+          ? "bg-gradient-to-r from-cyan-500/15 to-transparent text-primary border border-primary/30 shadow-[0_0_20px_-8px_oklch(0.78_0.13_210/.6)]"
+          : "text-body hover:bg-surface-2 hover:text-heading border border-transparent",
       ].join(" ")}
     >
       <Icon className="h-4.5 w-4.5 shrink-0" size={18} />
-      <span className="truncate">{item.label}</span>
-      {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_oklch(0.78_0.13_210)]" />}
+      {!isCollapsed && <span className="truncate">{item.label}</span>}
+      {active && !isCollapsed && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_oklch(0.78_0.13_210)]" />}
     </Link>
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ isCollapsed, onToggle }: { isCollapsed: boolean; onToggle: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (p: string) => (p === "/" ? pathname === "/" : pathname.startsWith(p));
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 flex w-[280px] flex-col border-r border-white/5 bg-sidebar text-sidebar-foreground">
-      {/* Logo */}
-      <div className="flex items-center gap-3 border-b border-white/5 px-5 py-5">
-        <div className="relative grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-cyan-400/30 to-blue-600/30 border border-cyan-400/40">
-          <ShieldCheck className="h-5 w-5 text-cyan-300" />
-          <span className="absolute inset-0 rounded-lg shadow-[0_0_18px_-2px_oklch(0.78_0.13_210/.6)]" />
-        </div>
-        <div className="leading-tight">
-          <div className="text-sm font-semibold tracking-wide text-white">BatysMonitor</div>
-          <div className="text-[11px] uppercase tracking-[0.15em] text-cyan-300/80">ДЭР ЗКО</div>
-        </div>
+    <aside className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-300 ${isCollapsed ? "w-[80px]" : "w-[280px]"}`}>
+      {/* Header / Logo */}
+      <div className={`flex items-center border-b border-border h-[73px] ${isCollapsed ? 'justify-center' : 'px-5 gap-3'}`}>
+        <button
+          onClick={onToggle}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-heading"
+        >
+          <Menu size={20} />
+        </button>
+
+        {!isCollapsed && (
+          <>
+            <div className="relative grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-cyan-400/30 to-blue-600/30 border border-primary/40">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+            </div>
+            <div className="leading-tight">
+              <div className="text-sm font-semibold tracking-wide text-heading">BatysMonitor</div>
+              <div className="text-[11px] uppercase tracking-[0.15em] text-primary/80">ДЭР ЗКО</div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-          Мониторинг
-        </div>
+        {!isCollapsed && (
+          <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-subtle">
+            Мониторинг
+          </div>
+        )}
         <div className="space-y-1">
           {mainNav.map((i) => (
-            <NavLink key={i.to} item={i} active={isActive(i.to)} />
+            <NavLink key={i.to} item={i} active={isActive(i.to)} isCollapsed={isCollapsed} />
           ))}
         </div>
 
-        <div className="mt-6 px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className={`mt-6 px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-subtle ${isCollapsed ? 'hidden' : ''}`}>
           Система
         </div>
         <div className="space-y-1">
           {sysNav.map((i) => (
-            <NavLink key={i.to} item={i} active={isActive(i.to)} />
+            <NavLink key={i.to} item={i} active={isActive(i.to)} isCollapsed={isCollapsed} />
           ))}
         </div>
       </nav>
 
-      {/* Profile */}
-      <div className="border-t border-white/5 p-3">
-        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-cyan-500 to-blue-700 text-sm font-semibold text-white">
-            МД
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-white">Марат Даниал</div>
-            <div className="truncate text-xs text-slate-400">Тимлид (Fullstack)</div>
-          </div>
-          <div className="ml-auto h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_oklch(0.72_0.18_150)]" />
-        </div>
-      </div>
     </aside>
   );
 }

@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { PageHeader } from "../components/PageHeader";
 import { TrendingUp, TrendingDown, AlertOctagon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/analytics")({
   head: () => ({
@@ -42,27 +43,47 @@ const districtData = [
 ];
 
 const axis = { stroke: "#475569", fontSize: 12 };
-const tooltipStyle = {
-  backgroundColor: "#0f172a",
-  border: "1px solid rgba(148,163,184,0.2)",
-  borderRadius: 8,
-  color: "#e2e8f0",
-};
+
+function useIsDark() {
+  const [isDark, setIsDark] = useState(true);
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
 
 function KpiCard({ icon: Icon, label, value, trend, accent }: any) {
   return (
-    <div className="rounded-xl border border-white/10 bg-surface p-5">
+    <div className="rounded-xl border border-border bg-surface p-5">
       <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-slate-400">{label}</span>
+        <span className="text-xs uppercase tracking-wider text-subtle">{label}</span>
         <Icon className={`h-4 w-4 ${accent}`} />
       </div>
-      <div className="mt-3 text-2xl font-semibold text-white">{value}</div>
+      <div className="mt-3 text-2xl font-semibold text-heading">{value}</div>
       <div className={`mt-1 text-xs ${accent}`}>{trend}</div>
     </div>
   );
 }
 
 function AnalyticsPage() {
+  const isDark = useIsDark();
+
+  const tooltipStyle = {
+    backgroundColor: isDark ? "#0f172a" : "#ffffff",
+    border: isDark ? "1px solid rgba(148,163,184,0.2)" : "1px solid rgba(0,0,0,0.1)",
+    borderRadius: 8,
+    color: isDark ? "#e2e8f0" : "#1e293b",
+    boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.4)" : "0 4px 20px rgba(0,0,0,0.1)",
+  };
+
+  const gridColor = isDark ? "rgba(148,163,184,0.1)" : "rgba(0,0,0,0.08)";
+  const cursorFill = isDark ? "rgba(148,163,184,0.05)" : "rgba(0,0,0,0.04)";
+
   return (
     <>
       <PageHeader
@@ -80,11 +101,11 @@ function AnalyticsPage() {
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {/* Bar */}
-          <section className="rounded-xl border border-white/10 bg-surface p-5 xl:col-span-2">
+          <section className="rounded-xl border border-border bg-surface p-5 xl:col-span-2">
             <header className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-white">Динамика налоговой задолженности</h2>
-                <p className="text-xs text-slate-400">Млн ₸ · КПН и НДС по месяцам</p>
+                <h2 className="text-base font-semibold text-heading">Динамика налоговой задолженности</h2>
+                <p className="text-xs text-subtle">Млн ₸ · КПН и НДС по месяцам</p>
               </div>
               <div className="flex gap-3 text-xs">
                 <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-cyan-400" /> КПН</span>
@@ -94,10 +115,10 @@ function AnalyticsPage() {
             <div className="h-72">
               <ResponsiveContainer>
                 <BarChart data={taxData}>
-                  <CartesianGrid stroke="rgba(148,163,184,0.1)" vertical={false} />
+                  <CartesianGrid stroke={gridColor} vertical={false} />
                   <XAxis dataKey="m" {...axis} />
                   <YAxis {...axis} />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(148,163,184,0.05)" }} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: cursorFill }} />
                   <Bar dataKey="kpn" name="КПН" fill="#22d3ee" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="nds" name="НДС" fill="#a78bfa" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -106,15 +127,15 @@ function AnalyticsPage() {
           </section>
 
           {/* Line */}
-          <section className="rounded-xl border border-white/10 bg-surface p-5">
+          <section className="rounded-xl border border-border bg-surface p-5">
             <header className="mb-4">
-              <h2 className="text-base font-semibold text-white">Уровень безработицы</h2>
-              <p className="text-xs text-slate-400">% от трудоспособного населения · 6 месяцев</p>
+              <h2 className="text-base font-semibold text-heading">Уровень безработицы</h2>
+              <p className="text-xs text-subtle">% от трудоспособного населения · 6 месяцев</p>
             </header>
             <div className="h-64">
               <ResponsiveContainer>
                 <LineChart data={unemploymentData}>
-                  <CartesianGrid stroke="rgba(148,163,184,0.1)" vertical={false} />
+                  <CartesianGrid stroke={gridColor} vertical={false} />
                   <XAxis dataKey="m" {...axis} />
                   <YAxis {...axis} domain={[4, 7]} />
                   <Tooltip contentStyle={tooltipStyle} />
@@ -133,10 +154,10 @@ function AnalyticsPage() {
           </section>
 
           {/* Pie */}
-          <section className="rounded-xl border border-white/10 bg-surface p-5">
+          <section className="rounded-xl border border-border bg-surface p-5">
             <header className="mb-4">
-              <h2 className="text-base font-semibold text-white">Концентрация рисков по районам</h2>
-              <p className="text-xs text-slate-400">Распределение критических субъектов</p>
+              <h2 className="text-base font-semibold text-heading">Концентрация рисков по районам</h2>
+              <p className="text-xs text-subtle">Распределение критических субъектов</p>
             </header>
             <div className="h-64">
               <ResponsiveContainer>
@@ -148,7 +169,7 @@ function AnalyticsPage() {
                     innerRadius={55}
                     outerRadius={90}
                     paddingAngle={2}
-                    stroke="rgba(15,23,42,1)"
+                    stroke={isDark ? "rgba(15,23,42,1)" : "rgba(255,255,255,1)"}
                   >
                     {districtData.map((d) => <Cell key={d.name} fill={d.color} />)}
                   </Pie>
@@ -156,7 +177,7 @@ function AnalyticsPage() {
                   <Legend
                     verticalAlign="bottom"
                     iconType="circle"
-                    formatter={(v) => <span className="text-xs text-slate-300">{v}</span>}
+                    formatter={(v) => <span className="text-xs text-body">{v}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>

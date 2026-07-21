@@ -6,7 +6,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -73,18 +73,42 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="ru" className="dark">
       <head><HeadContent /></head>
-      <body>{children}<Scripts /></body>
+      <body>
+        {/* Inline script to apply theme before first paint — prevents FOUC */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            var t = localStorage.getItem('batys-theme');
+            if (t === 'light') document.documentElement.classList.remove('dark');
+          } catch(e) {}
+        `}} />
+        {children}
+        <Scripts />
+      </body>
     </html>
   );
 }
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    // Sync theme class from localStorage on hydration
+    try {
+      const saved = localStorage.getItem("batys-theme");
+      if (saved === "light") {
+        document.documentElement.classList.remove("dark");
+      } else {
+        document.documentElement.classList.add("dark");
+      }
+    } catch {}
+  }, []);
+  
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-background text-foreground">
-        <Sidebar />
-        <main className="ml-[280px] min-h-screen">
+      <div className="min-h-screen bg-background text-foreground flex">
+        <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
+        <main className={`min-h-screen flex-1 transition-all duration-300 ${isCollapsed ? "ml-[80px]" : "ml-[280px]"}`}>
           <Outlet />
         </main>
       </div>
