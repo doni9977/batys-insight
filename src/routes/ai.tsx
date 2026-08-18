@@ -1,29 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useDomainMeta } from "../lib/domain";
 import {
   Sparkles,
   AlertTriangle,
   Database,
-  FileSearch,
-  ShieldAlert,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  FileText,
-  ArrowRight,
-  ArrowLeftRight,
   Search,
-  Filter,
+  FileText,
   Clock,
   Building2,
-  GraduationCap,
-  Banknote,
-  Users,
-  TrendingUp,
-  Eye,
-  ExternalLink,
+  CheckCircle2,
+  UploadCloud,
+  ChevronLeft,
+  ChevronRight,
+  User,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
+import { fetchRisks, uploadFile, checkJobStatus, type RiskRecord } from "../lib/api";
 
 export const Route = createFileRoute("/ai")({
   head: () => ({
@@ -35,556 +28,513 @@ export const Route = createFileRoute("/ai")({
   component: AiPage,
 });
 
-/* ── Types ── */
 type Severity = "critical" | "warning" | "info";
-type AnomalyStatus = "open" | "investigating" | "resolved";
-
-type DataSource = {
-  name: string;
-  db: string;
-  file?: string;
-  table?: string;
-  value: string | number;
-  date: string;
-};
 
 type Anomaly = {
-  id: string;
+  id: number;
+  indicator: string;
   title: string;
   description: string;
   severity: Severity;
-  status: AnomalyStatus;
-  category: string;
   organization: string;
-  bin: string;
-  district: string;
-  detectedAt: string;
-  sourceA: DataSource;
-  sourceB: DataSource;
-  difference: string;
-  aiComment: string;
-  affectedAmount?: string;
+  doctor: string;
+  patient: string;
+  date: string;
+  amount: number;
+  detailText: string;
 };
 
-/* ── Mock Data ── */
-const ANOMALIES: Anomaly[] = [
-  {
-    id: "AN-001",
-    title: "Расхождение количества студентов и получателей стипендии",
-    description: "В базе МОН РК зарегистрировано 100 студентов, однако стипендия выплачивается на 200 человек по данным казначейства.",
-    severity: "critical",
-    status: "open",
-    category: "Стипендии / Образование",
-    organization: 'Колледж «Батыс Білім»',
-    bin: "110240008811",
-    district: "Уральск",
-    detectedAt: "2026-07-02 14:32",
-    sourceA: {
-      name: "Реестр МОН РК",
-      db: "mon_rk_students",
-      file: "students_registry_2026_q2.xlsx",
-      table: "active_students",
-      value: 100,
-      date: "2026-06-30",
-    },
-    sourceB: {
-      name: "Казначейство РК",
-      db: "treasury_payments",
-      file: "stipend_payments_june2026.csv",
-      table: "monthly_payments",
-      value: 200,
-      date: "2026-06-30",
-    },
-    difference: "+100 получателей (расхождение 100%)",
-    aiComment: "Критическая аномалия: количество получателей стипендии в 2 раза превышает фактический контингент. Возможные причины: задвоение записей в реестре выплат, «мёртвые души», или ошибка миграции данных. Рекомендуется немедленная проверка.",
-    affectedAmount: "14.2 млн ₸",
-  },
-  {
-    id: "AN-002",
-    title: "Несоответствие штатного расписания и фонда оплаты труда",
-    description: "ФОТ начислен на 45 сотрудников, хотя штатное расписание утверждено на 32 ставки.",
-    severity: "critical",
-    status: "investigating",
-    category: "Зарплаты / ФОТ",
-    organization: 'ТОО «Орал Пром»',
-    bin: "110240001235",
-    district: "Уральск",
-    detectedAt: "2026-07-01 09:15",
-    sourceA: {
-      name: "КГНС (налоговая)",
-      db: "kgns_payroll",
-      file: "form_200_2026_q2.xml",
-      table: "payroll_declarations",
-      value: 45,
-      date: "2026-06-30",
-    },
-    sourceB: {
-      name: "ЕНБЕК (биржа труда)",
-      db: "enbek_staffing",
-      file: "staffing_plan_oral_prom.pdf",
-      table: "approved_positions",
-      value: 32,
-      date: "2026-06-15",
-    },
-    difference: "+13 сотрудников (расхождение 40.6%)",
-    aiComment: "ФОТ превышает штатное расписание на 13 единиц. Возможно: совместители не отражены в штатном, подряды оформлены как ТД, или фиктивное трудоустройство. Требуется сверка трудовых договоров.",
-    affectedAmount: "8.7 млн ₸",
-  },
-  {
-    id: "AN-003",
-    title: "Расхождение данных по земельному участку",
-    description: "Площадь участка в кадастре и в договоре аренды отличается на 2.4 га.",
-    severity: "warning",
-    status: "open",
-    category: "Земельные участки",
-    organization: 'ТОО «Урал Агро»',
-    bin: "210140005556",
-    district: "Байтерек",
-    detectedAt: "2026-06-30 16:45",
-    sourceA: {
-      name: "Госкадастр земель",
-      db: "gzk_lands",
-      file: "cadastre_extract_214.json",
-      table: "land_parcels",
-      value: "12.6 га",
-      date: "2026-06-28",
-    },
-    sourceB: {
-      name: "Договор аренды (акимат)",
-      db: "akimat_contracts",
-      file: "lease_contract_2024_0341.pdf",
-      table: "active_leases",
-      value: "15.0 га",
-      date: "2024-03-15",
-    },
-    difference: "+2.4 га в договоре (расхождение 19%)",
-    aiComment: "Площадь в договоре аренды превышает кадастровые данные. Вероятно: участок был частично изъят без обновления договора, либо допущена ошибка при регистрации. Рекомендуется выездная проверка.",
-  },
-  {
-    id: "AN-004",
-    title: "Дублирование контрагента в реестре поставщиков",
-    description: "Один и тот же поставщик зарегистрирован дважды с разными БИН-ами, общая сумма госзакупок — 78 млн ₸.",
-    severity: "warning",
-    status: "investigating",
-    category: "Госзакупки",
-    organization: 'ТОО «СтройИнвест ЗКО» / ТОО «СтройИнвест-West»',
-    bin: "190340002221 / 190340002255",
-    district: "Акжаикский",
-    detectedAt: "2026-06-29 11:20",
-    sourceA: {
-      name: "Портал госзакупок",
-      db: "goszakup_registry",
-      file: "suppliers_active_2026.csv",
-      table: "registered_suppliers",
-      value: "БИН 190340002221 — 45 млн ₸",
-      date: "2026-06-28",
-    },
-    sourceB: {
-      name: "Портал госзакупок",
-      db: "goszakup_registry",
-      file: "suppliers_active_2026.csv",
-      table: "registered_suppliers",
-      value: "БИН 190340002255 — 33 млн ₸",
-      date: "2026-06-28",
-    },
-    difference: "2 записи, совпадение учредителей на 100%",
-    aiComment: "Обнаружено совпадение учредителей, юридического адреса и контактных данных. Вероятно аффилированные компании, используемые для обхода порогов госзакупок. Совокупный объём: 78 млн ₸.",
-    affectedAmount: "78 млн ₸",
-  },
-  {
-    id: "AN-005",
-    title: "Превышение лимита бюджетного финансирования",
-    description: "Фактические расходы по программе «Дорожная карта занятости» на 22% превышают утверждённый план.",
-    severity: "warning",
-    status: "open",
-    category: "Бюджет",
-    organization: "Акимат ЗКО (Управление занятости)",
-    bin: "000140000111",
-    district: "Уральск",
-    detectedAt: "2026-06-28 08:00",
-    sourceA: {
-      name: "Бюджетный план (МФРК)",
-      db: "mf_budget_plans",
-      file: "budget_plan_2026_employment.xlsx",
-      table: "approved_limits",
-      value: "120 млн ₸",
-      date: "2026-01-15",
-    },
-    sourceB: {
-      name: "Казначейство РК (факт)",
-      db: "treasury_payments",
-      file: "fact_payments_h1_2026.csv",
-      table: "program_expenditures",
-      value: "146.4 млн ₸",
-      date: "2026-06-30",
-    },
-    difference: "+26.4 млн ₸ (превышение 22%)",
-    aiComment: "Фактические выплаты превышают утверждённый лимит. Возможно наличие незаконных авансов или оплат по незавершённым работам. Рекомендуется аудит каждого транша.",
-    affectedAmount: "26.4 млн ₸",
-  },
-  {
-    id: "AN-006",
-    title: "Несоответствие налоговых деклараций и банковских оборотов",
-    description: "Декларированный доход в 3 раза ниже банковских поступлений за тот же период.",
-    severity: "critical",
-    status: "open",
-    category: "Налоги / КПН",
-    organization: 'ТОО «Аксай Нефть Сервис»',
-    bin: "150840009877",
-    district: "Бурлинский (Аксай)",
-    detectedAt: "2026-07-02 10:05",
-    sourceA: {
-      name: "КГД (налоговая декларация)",
-      db: "kgd_declarations",
-      file: "kpn_declaration_q2_2026.xml",
-      table: "income_declarations",
-      value: "52 млн ₸",
-      date: "2026-06-30",
-    },
-    sourceB: {
-      name: "Нацбанк РК (банк. обороты)",
-      db: "nbk_bank_turnover",
-      file: "bank_turnover_aksay_neft.csv",
-      table: "credit_turnover",
-      value: "168 млн ₸",
-      date: "2026-06-30",
-    },
-    difference: "+116 млн ₸ (расхождение 223%)",
-    aiComment: "Банковские поступления кратно превышают декларированный доход. Высокая вероятность занижения налоговой базы. Рекомендуется выездная налоговая проверка и запрос выписок по всем счетам.",
-    affectedAmount: "116 млн ₸",
-  },
-];
+const severityOptions = [
+  { value: "all", label: "Все" },
+  { value: "critical", label: "Критично" },
+  { value: "warning", label: "Внимание" },
+  { value: "info", label: "Информация" },
+] as const;
 
-/* ── Helpers ── */
-const SEVERITY_CONFIG: Record<Severity, { label: string; bg: string; text: string; border: string; dot: string }> = {
-  critical: { label: "Критично", bg: "bg-red-500/10", text: "text-red-500 dark:text-red-400", border: "border-red-500/30", dot: "bg-red-500" },
-  warning: { label: "Внимание", bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-300", border: "border-amber-500/30", dot: "bg-amber-500" },
-  info: { label: "Информация", bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", border: "border-blue-500/30", dot: "bg-blue-500" },
+const formatAmount = (indicator: string, value: number) => {
+  if (indicator === "A3") return `${value} ед.`;
+  if (indicator === "A10") return `${value} мин.`;
+  if (indicator === "A1" || indicator === "A2" || indicator === "NR1" || indicator === "NR2") return "—";
+  if (indicator === "NR3") return `${value} комп.`;
+  return `${value.toLocaleString("ru-RU")} ₸`;
 };
 
-const STATUS_CONFIG: Record<AnomalyStatus, { label: string; bg: string; text: string }> = {
-  open: { label: "Открыто", bg: "bg-red-500/10", text: "text-red-500 dark:text-red-400" },
-  investigating: { label: "На проверке", bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-300" },
-  resolved: { label: "Решено", bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400" },
+const getSeverity = (indicator: string, amount: number): Severity => {
+  if (indicator === "A1" || indicator === "A2" || indicator === "A3") return "critical";
+  if (indicator.startsWith("NR")) return "critical";
+  if (indicator === "A4" || indicator === "A7" || indicator === "A10") return "warning";
+  if (amount > 50000) return "critical";
+  if (amount > 10000) return "warning";
+  return "info";
 };
 
-const CATEGORY_ICONS: Record<string, typeof Sparkles> = {
-  "Стипендии / Образование": GraduationCap,
-  "Зарплаты / ФОТ": Users,
-  "Земельные участки": Building2,
-  "Госзакупки": Banknote,
-  "Бюджет": TrendingUp,
-  "Налоги / КПН": FileSearch,
-};
-
-/* ── KPI Card ── */
-function KpiCard({ icon: Icon, label, value, accent, subtext }: {
-  icon: typeof Sparkles; label: string; value: string | number; accent: string; subtext?: string;
-}) {
+function KpiCard({ icon: Icon, label, value, accent, subtext }: { icon: typeof Sparkles; label: string; value: string | number; accent: string; subtext?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-subtle">{label}</span>
-        <div className={`rounded-lg p-2 ${accent}`}>
-          <Icon className="h-4 w-4" />
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/40 p-6 backdrop-blur-xl transition-all hover:scale-[1.02] hover:bg-white/60 hover:shadow-lg dark:border-white/5 dark:bg-black/40 dark:hover:bg-black/60">
+      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient:to-br from-white/20 to-transparent blur-2xl" />
+      <div className="relative z-10 flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">{label}</span>
+        <div className={`rounded-xl p-2.5 shadow-sm ${accent}`}>
+          <Icon className="h-5 w-5" />
         </div>
       </div>
-      <div className="mt-3 text-2xl font-semibold text-heading">{value}</div>
-      {subtext && <div className="mt-1 text-xs text-subtle">{subtext}</div>}
+      <div className="relative z-10 mt-4 text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100">{value}</div>
+      {subtext && <div className="relative z-10 mt-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">{subtext}</div>}
     </div>
   );
 }
 
-/* ── Source Card ── */
-function SourceBlock({ source, label, accentBorder }: { source: DataSource; label: string; accentBorder: string }) {
-  return (
-    <div className={`flex-1 rounded-lg border ${accentBorder} bg-surface p-4 min-w-0`}>
-      <div className="flex items-center gap-2 mb-3">
-        <Database className="h-3.5 w-3.5 text-subtle shrink-0" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-subtle">{label}</span>
-      </div>
-      <div className="space-y-2.5">
-        <div>
-          <div className="text-[11px] text-subtle">Источник</div>
-          <div className="text-sm font-medium text-heading">{source.name}</div>
-        </div>
-        <div>
-          <div className="text-[11px] text-subtle">База данных</div>
-          <div className="text-sm font-mono text-body">{source.db}</div>
-        </div>
-        {source.file && (
-          <div>
-            <div className="text-[11px] text-subtle">Файл / Документ</div>
-            <div className="flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-sm font-mono text-primary truncate">{source.file}</span>
-            </div>
-          </div>
-        )}
-        {source.table && (
-          <div>
-            <div className="text-[11px] text-subtle">Таблица</div>
-            <div className="text-sm font-mono text-body">{source.table}</div>
-          </div>
-        )}
-        <div className="pt-2 border-t border-border-subtle">
-          <div className="text-[11px] text-subtle">Значение</div>
-          <div className="text-lg font-bold text-heading">{String(source.value)}</div>
-          <div className="text-[11px] text-subtle mt-0.5">на {source.date}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Anomaly Card (Expandable) ── */
-function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
-  const [expanded, setExpanded] = useState(false);
-  const sev = SEVERITY_CONFIG[anomaly.severity];
-  const stat = STATUS_CONFIG[anomaly.status];
-  const CategoryIcon = CATEGORY_ICONS[anomaly.category] || FileSearch;
-
-  return (
-    <div className={`rounded-xl border ${sev.border} bg-surface overflow-hidden transition-shadow hover:shadow-lg dark:hover:shadow-black/20`}>
-      {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full text-left px-6 py-5 flex items-start gap-4 cursor-pointer"
-      >
-        {/* Severity dot */}
-        <div className="pt-1 shrink-0">
-          <div className={`h-3 w-3 rounded-full ${sev.dot} shadow-[0_0_8px_currentColor]`} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold ${sev.bg} ${sev.text}`}>
-              <AlertTriangle className="h-3 w-3" />
-              {sev.label}
-            </span>
-            <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold ${stat.bg} ${stat.text}`}>
-              {stat.label}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-subtle">
-              <CategoryIcon className="h-3 w-3" />
-              {anomaly.category}
-            </span>
-            <span className="text-[11px] text-subtle font-mono">{anomaly.id}</span>
-          </div>
-          <h3 className="text-base font-semibold text-heading leading-snug">{anomaly.title}</h3>
-          <p className="mt-1 text-sm text-body line-clamp-2">{anomaly.description}</p>
-          <div className="mt-2 flex items-center gap-4 text-xs text-subtle">
-            <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{anomaly.organization}</span>
-            <span className="font-mono">БИН {anomaly.bin}</span>
-            <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{anomaly.detectedAt}</span>
-          </div>
-        </div>
-
-        {/* Right side */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          {anomaly.affectedAmount && (
-            <div className={`rounded-lg px-3 py-1.5 text-sm font-bold ${sev.bg} ${sev.text}`}>
-              {anomaly.affectedAmount}
-            </div>
-          )}
-          <div className="text-subtle">
-            {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-          </div>
-        </div>
-      </button>
-
-      {/* Expanded Details */}
-      {expanded && (
-        <div className="border-t border-border-subtle px-6 pb-6 pt-5 space-y-5">
-          {/* Source comparison */}
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-subtle mb-3 flex items-center gap-2">
-              <ArrowLeftRight className="h-3.5 w-3.5" />
-              Сравнение источников данных
-            </h4>
-            <div className="flex gap-4 items-stretch">
-              <SourceBlock source={anomaly.sourceA} label="Источник A" accentBorder="border-cyan-500/30 dark:border-cyan-500/20" />
-              
-              {/* VS divider */}
-              <div className="flex flex-col items-center justify-center gap-2 shrink-0 px-2">
-                <div className="h-full w-px bg-border-subtle" />
-                <div className={`rounded-full p-2 ${sev.bg} ${sev.text}`}>
-                  <ArrowLeftRight className="h-4 w-4" />
-                </div>
-                <div className="h-full w-px bg-border-subtle" />
-              </div>
-              
-              <SourceBlock source={anomaly.sourceB} label="Источник B" accentBorder={`${sev.border}`} />
-            </div>
-          </div>
-
-          {/* Difference highlight */}
-          <div className={`rounded-lg ${sev.bg} border ${sev.border} p-4`}>
-            <div className="flex items-start gap-3">
-              <ShieldAlert className={`h-5 w-5 shrink-0 mt-0.5 ${sev.text}`} />
-              <div>
-                <div className="text-sm font-semibold text-heading">Обнаруженная разница</div>
-                <div className={`text-lg font-bold mt-1 ${sev.text}`}>{anomaly.difference}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* AI Comment */}
-          <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-primary/10 p-2 shrink-0">
-                <Sparkles className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-primary mb-1">Вывод ИИ-аналитика</div>
-                <p className="text-sm text-body leading-relaxed">{anomaly.aiComment}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-2">
-            <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
-              <Eye className="h-4 w-4" />
-              Открыть расследование
-            </button>
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-body hover:bg-surface-2 transition-colors">
-              <ExternalLink className="h-4 w-4" />
-              Скачать отчёт
-            </button>
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-body hover:bg-surface-2 transition-colors">
-              <CheckCircle2 className="h-4 w-4" />
-              Отклонить
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Main Page ── */
 function AiPage() {
+  const meta = useDomainMeta();
+  const [risks, setRisks] = useState<RiskRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [severityFilter, setSeverityFilter] = useState<Severity | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<AnomalyStatus | "all">("all");
+  const [selectedIndicator, setSelectedIndicator] = useState(meta.algorithms[0].id);
+  const [selectedSeverity, setSelectedSeverity] = useState<(typeof severityOptions)[number]["value"]>("all");
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalFound, setTotalFound] = useState(0);
+  const limit = 50;
 
-  const filtered = ANOMALIES.filter((a) => {
-    const matchSearch = search === "" || [a.title, a.organization, a.bin, a.id, a.category]
-      .some(v => v.toLowerCase().includes(search.toLowerCase()));
-    const matchSeverity = severityFilter === "all" || a.severity === severityFilter;
-    const matchStatus = statusFilter === "all" || a.status === statusFilter;
-    return matchSearch && matchSeverity && matchStatus;
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "running" | "done" | "error">("idle");
+  const [uploadError, setUploadError] = useState("");
+
+  // Reset page and indicator when domain changes
+  useEffect(() => {
+    setSelectedIndicator(meta.algorithms[0].id);
+    setPage(1);
+  }, [meta.id]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedIndicator]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRisks() {
+      try {
+        setIsLoading(true);
+        setError("");
+        const response = await fetchRisks(selectedIndicator, undefined, page, limit);
+
+        if (!isMounted) return;
+        setRisks(response.risks ?? []);
+        setTotalPages(response.total_pages ?? 1);
+        setTotalFound(response.total_found ?? 0);
+      } catch (err) {
+        if (!isMounted) return;
+        setError(err instanceof Error ? err.message : "Не удалось загрузить аномалии");
+        setRisks([]);
+        setTotalPages(1);
+        setTotalFound(0);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    void loadRisks();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedIndicator, page]);
+
+  const anomalies = useMemo<Anomaly[]>(() => {
+    return risks.map((risk, index) => {
+      const amount = Number(risk.amount || 0);
+      const clinicName = risk.clinic_name || "Неизвестная клиника";
+
+      const detailText = (() => {
+        const ind = risk.indicator;
+        const d = risk.details;
+        
+        if (ind === "A1" || ind === "A2") {
+          return `${d?.reason || "Нарушение"}: Пациенту ${d?.patient_age || "—"} лет, Пол: ${d?.patient_gender || "—"}`;
+        }
+        if (ind === "A3") {
+          return `Врач оказал ${d?.service_count} услуг за час (норма ${d?.threshold}) и ${d?.daily_count} услуг за день (норма 200)`;
+        }
+        if (ind === "A4") {
+          return `Услуга оказана ${d?.total_count} раз за день (ограничение: ${d?.allowed_per_day} в день)`;
+        }
+        if (ind === "A7") {
+          return `За год услуга оказана ${d?.total_quantity} раз (годовой лимит: ${d?.allowed_per_year})`;
+        }
+        if (ind === "A8") {
+          return `Завышение стоимости: сумма к оплате ${d?.actual_amount} ₸ (макс. тариф с учетом количества: ${d?.allowed_amount} ₸). Разница: ${d?.excess_amount} ₸`;
+        }
+        if (ind === "A10") {
+          return `Интервал между услугами составил ${d?.actual_interval_minutes} мин (норматив ${d?.required_interval_minutes} мин). Предыдущая услуга: ${d?.previous_service_name || "—"}`;
+        }
+        if (ind === "NR1") {
+          return `${d?.reason}. Регистрация ТОО "${d?.company_name}" (БИН: ${d?.bin}). Дата рег: ${d?.reg_date}.`;
+        }
+        if (ind === "NR2") {
+          return `${d?.reason}. Пребывание ${d?.stay_days} дн. ГРНЗ авто: ${d?.vehicle_plate}. КПП: ${d?.crossing_point}. Ввезено номиналов на данном авто: ${d?.shared_plate_count}.`;
+        }
+        if (ind === "NR3") {
+          return `${d?.reason}. Нотариус: ${d?.notary}, Переводчик: ${d?.translator}. Зарегистрировали вместе ${d?.pair_count} компаний нерезидентов.`;
+        }
+        if (ind === "NR4") {
+          return `${d?.reason}. Заявленный уставной капитал: ${d?.authorized_capital} ₸ (порог ${d?.threshold} ₸). Вид деятельности: ${d?.activity_type}`;
+        }
+        return `${meta.doctorLabel} ${risk.doctor_name || clinicName} нарушил правила`;
+      })();
+
+      return {
+        id: risk.id || index + 1,
+        indicator: risk.indicator,
+        title: (risk.details as any)?.service_name || risk.indicator,
+        description: (risk.details as any)?.service_code ? `Код: ${(risk.details as any).service_code}` : clinicName,
+        severity: getSeverity(risk.indicator, amount),
+        organization: clinicName,
+        doctor: risk.doctor_name || "—",
+        patient: risk.patient_iin || "—",
+        date: risk.risk_date || "—",
+        amount,
+        detailText,
+      };
+    });
+  }, [risks]);
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    try {
+      setUploadStatus("uploading");
+      setUploadError("");
+      const uploadResult = await uploadFile(selectedFile, meta.uploadEndpoint);
+      const jobId = typeof uploadResult.risk_job_id === "number" ? uploadResult.risk_job_id : undefined;
+
+      if (jobId) {
+        setUploadStatus("running");
+        
+        // Wait and poll until job is done
+        const pollTimer = setInterval(async () => {
+          try {
+             const job = await checkJobStatus(jobId);
+             if (job.status === "done" || job.status === "failed") {
+                clearInterval(pollTimer);
+                if (job.status === "done") {
+                  const response = await fetchRisks(selectedIndicator, jobId, 1, limit);
+                  setRisks(response.risks ?? []);
+                  setTotalPages(response.total_pages ?? 1);
+                  setTotalFound(response.total_found ?? 0);
+                  setPage(1);
+                  setUploadStatus("done");
+                } else {
+                  setUploadStatus("error");
+                  setUploadError(job.error_message || "Ошибка расчета рисков");
+                }
+             }
+          } catch(e) {
+            console.error(e);
+          }
+        }, 3000);
+        return;
+      }
+
+      setUploadStatus("done");
+    } catch (err) {
+      setUploadStatus("error");
+      setUploadError(err instanceof Error ? err.message : "Не удалось загрузить файл");
+    }
+  };
+
+  const filtered = anomalies.filter((item) => {
+    const matchesSeverity = selectedSeverity === "all" || item.severity === selectedSeverity;
+    const matchesSearch = !search.trim() || [item.title, item.organization, item.doctor, item.patient, item.date].some((value) =>
+      value.toLowerCase().includes(search.toLowerCase()),
+    );
+    return matchesSeverity && matchesSearch;
   });
 
-  const totalAmount = ANOMALIES
-    .filter(a => a.affectedAmount)
-    .reduce((sum, a) => sum + parseFloat(a.affectedAmount!.replace(/[^\d.]/g, "")), 0);
+  const totalMoneyAmount = filtered.reduce((sum, item) => {
+    if (item.indicator === "A1" || item.indicator === "A2" || item.indicator === "A3" || item.indicator === "A10") return sum;
+    return sum + item.amount;
+  }, 0);
 
   return (
-    <>
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/50">
       <PageHeader
         title="ИИ-Аналитик"
-        subtitle="Автоматический разбор документов и обнаружение аномалий"
-        right={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-sm">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Анализ активен</span>
-            </div>
-          </div>
-        }
+        subtitle="Интеллектуальный поиск фрода и аномалий в данных медицинского страхования"
       />
 
-      <div className="p-8 space-y-6">
-        {/* KPI strip */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
+        {/* Controls Section - Glassmorphism Card */}
+        <div className="rounded-3xl border border-white/20 bg-white/60 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-2xl dark:border-white/10 dark:bg-black/60 dark:shadow-none">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <div className="rounded-full bg-cyan-500/20 p-1.5">
+              <Sparkles className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+            </div>
+            Алгоритм анализа
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            {meta.algorithms.map((option) => {
+              const isActive = selectedIndicator === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setSelectedIndicator(option.id)}
+                  className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-all duration-300 ${
+                    isActive
+                      ? "border-cyan-500/50 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 text-cyan-700 shadow-md shadow-cyan-500/10 ring-1 ring-cyan-500/20 dark:text-cyan-300"
+                      : "border-slate-200/50 bg-white/50 text-slate-600 hover:border-cyan-500/30 hover:bg-cyan-50/50 hover:text-cyan-700 dark:border-white/5 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-4 border-t border-slate-200/50 pt-6 md:flex-row md:items-center md:justify-between dark:border-white/10">
+            <div className="flex flex-wrap items-center gap-2 bg-slate-100/50 p-1 rounded-xl dark:bg-white/5">
+              {severityOptions.map((option) => {
+                const isActive = selectedSeverity === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedSeverity(option.value)}
+                    className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${
+                      isActive
+                        ? "bg-white text-slate-800 shadow-sm dark:bg-slate-800 dark:text-slate-100"
+                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="group relative cursor-pointer overflow-hidden rounded-xl border border-dashed border-cyan-300/50 bg-cyan-50/50 px-4 py-2 transition-all hover:bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:hover:bg-cyan-500/20">
+                <span className="flex items-center gap-2 text-xs font-semibold text-cyan-700 dark:text-cyan-300">
+                  <FileText className="h-4 w-4" />
+                  {selectedFile ? selectedFile.name : "Выбрать Excel"}
+                </span>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+              
+              <button
+                type="button"
+                onClick={handleUpload}
+                disabled={!selectedFile || uploadStatus === "uploading" || uploadStatus === "running"}
+                className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 hover:shadow-cyan-500/40 disabled:pointer-events-none disabled:opacity-50"
+              >
+                <div className="absolute inset-0 bg-white/20 opacity-0 transition-opacity group-hover:opacity-100" />
+                <UploadCloud className="relative z-10 h-4 w-4" />
+                <span className="relative z-10">
+                  {uploadStatus === "uploading" ? "Отправка..." : uploadStatus === "running" ? "Анализ ИИ..." : uploadStatus === "done" ? "Готово!" : "Запуск анализа"}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {uploadError ? (
+            <div className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm font-medium text-red-600 dark:text-red-400">
+              {uploadError}
+            </div>
+          ) : null}
+        </div>
+
+        {/* KPI Cards Grid */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
           <KpiCard
             icon={AlertTriangle}
-            label="Аномалий обнаружено"
-            value={ANOMALIES.length}
-            accent="bg-red-500/10 text-red-500 dark:text-red-400"
-            subtext={`${ANOMALIES.filter(a => a.severity === "critical").length} критических`}
+            label="Аномалий найдено"
+            value={isLoading ? "—" : totalFound.toLocaleString("ru-RU")}
+            accent="bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-red-500/30"
+            subtext="Всего записей по фильтру"
           />
           <KpiCard
             icon={Database}
-            label="Источников проверено"
-            value={8}
-            accent="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
-            subtext="КГД, МОН, Казначейство, ЕНБЕК и др."
+            label="Источников"
+            value={1}
+            accent="bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-cyan-500/30"
+            subtext="Реестр ДЭР"
           />
           <KpiCard
-            icon={Banknote}
-            label="Сумма расхождений"
-            value={`${totalAmount.toFixed(1)} млн ₸`}
-            accent="bg-amber-500/10 text-amber-600 dark:text-amber-300"
-            subtext="за 1-е полугодие 2026"
+            icon={Sparkles}
+            label="Ущерб на странице"
+            value={isLoading ? "—" : `${totalMoneyAmount.toLocaleString("ru-RU")} ₸`}
+            accent="bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-amber-500/30"
+            subtext="Сумма рисков (текущая страница)"
           />
           <KpiCard
-            icon={FileSearch}
-            label="Документов обработано"
-            value="1 247"
-            accent="bg-violet-500/10 text-violet-600 dark:text-violet-400"
-            subtext="XML, CSV, PDF, JSON"
+            icon={FileText}
+            label="Страницы"
+            value={isLoading ? "—" : `${page} / ${totalPages}`}
+            accent="bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-violet-500/30"
+            subtext={`По ${limit} записей`}
           />
         </div>
 
-        {/* Filters & Search */}
+        {error ? (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-sm font-medium text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        ) : null}
+
+        {/* Search */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+          <div className="relative max-w-lg flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по аномалиям, организации или БИН..."
-              className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-subtle focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="Поиск по услуге, клинике, врачу или пациенту..."
+              className="w-full rounded-2xl border border-white/20 bg-white/60 py-3.5 pl-11 pr-4 text-sm font-medium text-slate-800 placeholder:text-slate-400 shadow-sm backdrop-blur-xl transition-all focus:border-cyan-500/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-cyan-500/10 dark:border-white/10 dark:bg-black/40 dark:text-slate-200 dark:focus:bg-black/60"
             />
           </div>
-
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-subtle" />
-            <select
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value as Severity | "all")}
-              className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-body focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="all">Все уровни</option>
-              <option value="critical">Критично</option>
-              <option value="warning">Внимание</option>
-              <option value="info">Информация</option>
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as AnomalyStatus | "all")}
-              className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-body focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="all">Все статусы</option>
-              <option value="open">Открыто</option>
-              <option value="investigating">На проверке</option>
-              <option value="resolved">Решено</option>
-            </select>
-          </div>
-
-          <div className="ml-auto text-sm text-subtle">
-            Показано {filtered.length} из {ANOMALIES.length} аномалий
-          </div>
         </div>
 
-        {/* Anomaly List */}
-        <div className="space-y-4">
-          {filtered.map((anomaly) => (
-            <AnomalyCard key={anomaly.id} anomaly={anomaly} />
-          ))}
-          {filtered.length === 0 && (
-            <div className="rounded-xl border border-border bg-surface p-16 text-center">
-              <Search className="mx-auto h-10 w-10 text-subtle" />
-              <p className="mt-4 text-sm text-subtle">Аномалий по заданным фильтрам не найдено</p>
+        {/* Results */}
+        {isLoading ? (
+          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-3xl border border-white/20 bg-white/40 p-12 backdrop-blur-xl dark:border-white/10 dark:bg-black/40">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-cyan-500/30 border-t-cyan-500" />
+            <p className="mt-4 text-sm font-medium text-slate-500">Загрузка данных ИИ...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-3xl border border-white/20 bg-white/40 p-12 text-center backdrop-blur-xl dark:border-white/10 dark:bg-black/40">
+            <div className="rounded-full bg-slate-100 p-4 dark:bg-white/5">
+              <CheckCircle2 className="h-8 w-8 text-slate-400" />
             </div>
-          )}
-        </div>
+            <p className="mt-4 text-base font-semibold text-slate-700 dark:text-slate-300">Аномалий не обнаружено</p>
+            <p className="mt-1 text-sm text-slate-500">Попробуйте изменить фильтры или загрузить новый файл.</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {filtered.map((item) => {
+              const isCritical = item.severity === "critical";
+              const isWarning = item.severity === "warning";
+              
+              const accentColor = isCritical
+                ? "from-red-500/10 to-transparent border-red-500/20 text-red-700 dark:text-red-400"
+                : isWarning
+                  ? "from-amber-500/10 to-transparent border-amber-500/20 text-amber-700 dark:text-amber-400"
+                  : "from-blue-500/10 to-transparent border-blue-500/20 text-blue-700 dark:text-blue-400";
+              
+              const badgeClass = isCritical
+                ? "bg-red-500 text-white shadow-red-500/30"
+                : isWarning
+                  ? "bg-amber-500 text-white shadow-amber-500/30"
+                  : "bg-blue-500 text-white shadow-blue-500/30";
+
+              return (
+                <div 
+                  key={item.id} 
+                  className={`group relative overflow-hidden rounded-3xl border bg-gradient-to-r ${accentColor} bg-white/60 p-6 shadow-sm backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-md dark:bg-black/40`}
+                >
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex-1 space-y-4">
+                      {/* Tags */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm ${badgeClass}`}>
+                          {isCritical ? "Критично" : isWarning ? "Внимание" : "Информация"}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:bg-white/10 dark:text-slate-300">
+                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                          {item.organization}
+                        </span>
+                        {item.date && item.date !== "—" && (
+                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:bg-white/10 dark:text-slate-300">
+                            <Clock className="h-3.5 w-3.5 text-slate-400" />
+                            {item.date}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Content */}
+                      <div>
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{item.title}</h3>
+                        <p className="mt-1 text-sm font-medium text-slate-500">{item.description}</p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-600 dark:text-slate-400">
+                         <span className="flex items-center gap-1.5">
+                            <User className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                            <span className="text-slate-400">{meta.doctorLabel}:</span> {item.doctor}
+                         </span>
+                         <span className="flex items-center gap-1.5">
+                            <CheckCircle2 className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                            <span className="text-slate-400">{meta.iinLabel}:</span> {item.patient}
+                         </span>
+                      </div>
+                    </div>
+
+                    {/* Amount & Detail Box */}
+                    <div className="flex shrink-0 flex-col gap-3 lg:w-72 lg:items-end">
+                       {item.amount > 0 && !["A1", "A2", "NR1", "NR2"].includes(item.indicator) && (
+                         <div className="rounded-2xl bg-white/80 p-4 text-right shadow-sm ring-1 ring-slate-900/5 dark:bg-black/40 dark:ring-white/10">
+                           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                             {item.indicator === "A3" || item.indicator === "A10" ? "Превышение норматива" : item.indicator === "NR3" ? "Компаний" : "Сумма ущерба"}
+                           </div>
+                           <div className={`mt-1 text-2xl font-black tracking-tight ${isCritical ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
+                             {formatAmount(item.indicator, item.amount)}
+                           </div>
+                         </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Detail explanation */}
+                  <div className="mt-5 rounded-2xl bg-white/50 p-4 text-sm font-medium text-slate-700 ring-1 ring-slate-900/5 dark:bg-black/20 dark:text-slate-300 dark:ring-white/5">
+                     <span className="text-cyan-600 dark:text-cyan-400 font-bold mr-2">Решение ИИ:</span>
+                     {item.detailText}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination UI */}
+        {!isLoading && totalPages > 1 && (
+          <div className="flex items-center justify-between rounded-2xl border border-white/20 bg-white/60 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-black/40">
+            <div className="text-sm font-medium text-slate-500">
+              Показано {(page - 1) * limit + 1} – {Math.min(page * limit, totalFound)} из {totalFound} аномалий
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:text-cyan-600 disabled:opacity-50 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              
+              <div className="flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-slate-700 shadow-sm dark:bg-white/5 dark:text-slate-200">
+                Страница {page} из {totalPages}
+              </div>
+              
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:text-cyan-600 disabled:opacity-50 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }

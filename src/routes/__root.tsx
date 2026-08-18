@@ -3,14 +3,12 @@ import {
   Outlet,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
-  Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 
-import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Sidebar } from "../components/Sidebar";
+import { DomainProvider } from "../lib/domain";
 
 function NotFoundComponent() {
   return (
@@ -59,34 +57,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "Система мониторинга экономических рисков Западно-Казахстанской области" },
     ],
     links: [
-      { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" },
     ],
   }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="ru" className="dark">
-      <head><HeadContent /></head>
-      <body>
-        {/* Inline script to apply theme before first paint — prevents FOUC */}
-        <script dangerouslySetInnerHTML={{ __html: `
-          try {
-            var t = localStorage.getItem('batys-theme');
-            if (t === 'light') document.documentElement.classList.remove('dark');
-          } catch(e) {}
-        `}} />
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -106,12 +83,14 @@ function RootComponent() {
   
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-background text-foreground flex">
-        <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
-        <main className={`min-h-screen flex-1 transition-all duration-300 ${isCollapsed ? "ml-[80px]" : "ml-[280px]"}`}>
-          <Outlet />
-        </main>
-      </div>
+      <DomainProvider>
+        <div className="min-h-screen bg-background text-foreground flex">
+          <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
+          <main className={`min-h-screen flex-1 transition-all duration-300 ${isCollapsed ? "ml-[80px]" : "ml-[280px]"}`}>
+            <Outlet />
+          </main>
+        </div>
+      </DomainProvider>
     </QueryClientProvider>
   );
 }

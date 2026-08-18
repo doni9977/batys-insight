@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Settings, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
+import { DomainSwitcher } from "./DomainSwitcher";
 
 export function PageHeader({
   title,
@@ -40,6 +41,8 @@ export function PageHeader({
 
         {/* Global Header Controls (Profile, Settings, Theme) */}
         <div className="flex items-center gap-4">
+          <DomainSwitcher />
+          
           <button 
             onClick={toggleTheme}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface text-subtle transition-colors hover:bg-surface-2 hover:text-heading"
